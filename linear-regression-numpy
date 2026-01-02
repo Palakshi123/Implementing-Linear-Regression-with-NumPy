@@ -1,0 +1,163 @@
+import numpy as np
+
+class LinearRegressionNumPy:
+    """
+    Linear Regression built from scratch using NumPy.
+
+    Goal:
+    Learn a straight line that best fits the data.
+
+    Equation:
+    y = b + w1*x1 + w2*x2 + ...
+
+    Where:
+    - b  = intercept (starting value)
+    - w  = weights (importance of each feature)
+    """
+
+    def __init__(self, fit_intercept=True, standardize=False):
+        # Whether to add a column of 1s for intercept (b)
+        self.fit_intercept = fit_intercept
+
+        # Whether to scale features (useful for gradient descent)
+        self.standardize = standardize
+
+        # Model parameters (weights)
+        self.theta_ = None
+
+        # Used only if standardization is enabled
+        self.mean_ = None
+        self.std_ = None
+
+        # Stores loss values during training
+        self.loss_history_ = []
+
+    # -----------------------------
+    # Helper functions
+    # -----------------------------
+
+    def _ensure_2d(self, X):
+        """
+        Make sure X is always 2D.
+        If user passes [1, 2, 3], convert it to [[1], [2], [3]]
+        """
+        X = np.asarray(X)
+        if X.ndim == 1:
+            X = X.reshape(-1, 1)
+        return X
+
+    def _add_intercept(self, X):
+        """
+        Adds a column of 1s to X so we can learn intercept (b).
+        """
+        if not self.fit_intercept:
+            return X
+
+        ones = np.ones((X.shape[0], 1))
+        return np.hstack((ones, X))
+
+    def _fit_standardize(self, X):
+        """
+        Calculate mean and std from training data,
+        then scale features.
+        """
+        self.mean_ = X.mean(axis=0)
+        self.std_ = X.std(axis=0)
+
+        # Prevent division by zero
+        self.std_ = np.where(self.std_ == 0, 1, self.std_)
+
+        return (X - self.mean_) / self.std_
+
+    def _apply_standardize(self, X):
+        """
+        Apply stored mean and std to new data.
+        """
+        return (X - self.mean_) / self.std_
+
+    # -----------------------------
+    # Model training
+    # -----------------------------
+
+    def fit_normal_equation(self, X, y):
+        """
+        Train model using Normal Equation.
+
+        Formula:
+        theta = (XᵀX)^(-1) Xᵀy
+
+        This gives the best solution directly.
+        """
+        X = self._ensure_2d(X)
+
+        if self.standardize:
+            X = self._fit_standardize(X)
+
+        X = self._add_intercept(X)
+        y = np.asarray(y).reshape(-1, 1)
+
+        # Use pseudo-inverse for numerical stability
+        self.theta_ = np.linalg.pinv(X.T @ X) @ X.T @ y
+
+        return self
+
+    def fit_gradient_descent(self, X, y, lr=0.1, epochs=1000):
+        """
+        Train model using Gradient Descent.
+
+        Idea:
+        - Start with weights = 0
+        - Slowly update them to reduce error
+        """
+        X = self._ensure_2d(X)
+
+        if self.standardize:
+            X = self._fit_standardize(X)
+
+        X = self._add_intercept(X)
+        y = np.asarray(y).reshape(-1, 1)
+
+        m, n = X.shape
+
+        # Initialize weights with zeros
+        self.theta_ = np.zeros((n, 1))
+        self.loss_history_ = []
+
+        for _ in range(epochs):
+            # Step 1: Make predictions
+            y_pred = X @ self.theta_
+
+            # Step 2: Calculate error
+            error = y_pred - y
+
+            # Step 3: Compute gradient
+            gradient = (2 / m) * (X.T @ error)
+
+            # Step 4: Update weights
+            self.theta_ -= lr * gradient
+
+            # Step 5: Store loss (MSE)
+            loss = np.mean(error ** 2)
+            self.loss_history_.append(loss)
+
+        return self
+
+    # -----------------------------
+    # Prediction
+    # -----------------------------
+
+    def predict(self, X):
+        """
+        Predict output for new input data.
+        """
+        if self.theta_ is None:
+            raise ValueError("Model is not trained yet.")
+
+        X = self._ensure_2d(X)
+
+        if self.standardize:
+            X = self._apply_standardize(X)
+
+        X = self._add_intercept(X)
+
+        return (X @ self.theta_).flatten()
